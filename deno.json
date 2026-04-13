@@ -1,0 +1,24 @@
+{
+  "name": "@frontside/focus",
+  "exports": "./mod.ts",
+  "license": "ISC",
+  "publish": { "include": ["lib", "mod.ts", "README.md"] },
+  "lock": false,
+  "tasks": {
+    "test": "deno test"
+  },
+  "lint": {
+    "rules": { "exclude": ["prefer-const", "require-yield"] },
+    "plugins": ["lint/prefer-let.ts"]
+  },
+  "fmt": {},
+  "test": {},
+  "compilerOptions": {
+    "lib": ["deno.ns", "esnext", "dom", "dom.iterable", "deno.unstable"]
+  },
+  "imports": {
+    "@std/testing": "jsr:@std/testing@1",
+    "@std/expect": "jsr:@std/expect@1"
+  },
+  "version": "0.0.0"
+}
