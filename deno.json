@@ -1,5 +1,5 @@
 {
-  "name": "@frontside/focus",
+  "name": "@frontside/freedom",
   "exports": "./mod.ts",
   "license": "ISC",
   "publish": { "include": ["lib", "mod.ts", "README.md"] },
@@ -17,6 +17,8 @@
     "lib": ["deno.ns", "esnext", "dom", "dom.iterable", "deno.unstable"]
   },
   "imports": {
+    "effection": "jsr:@effection/effection@4.1.0-alpha.7",
+    "effection/experimental": "jsr:@effection/effection@4.1.0-alpha.7/experimental",
     "@std/testing": "jsr:@std/testing@1",
     "@std/expect": "jsr:@std/expect@1"
   },

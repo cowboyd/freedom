@@ -83,10 +83,14 @@ change records in the future.
 
 ### 2.6 Read-only Node surface
 
-The `Node` object is a read-only view. All fields — `id`,
-`name`, `props`, `children`, `parent` — are for reading only.
-All mutations go through the `freedom:node` context API, which
-makes every mutation interceptable by middleware.
+The `Node` object's data fields — `id`, `name`, `props`,
+`children`, `parent` — are for reading only. All property
+and structural mutations go through the `freedom:node`
+context API, which makes every mutation interceptable by
+middleware. `Node` also exposes `eval()` for scoped operation
+execution and `remove()` for lifecycle management — these
+are methods, not context API operations, because they
+require a specific node reference.
 
 ---
 
@@ -103,8 +107,11 @@ Each node has a framework-assigned unique `id`, an optional
 name, a property bag, an ordered list of children, and a
 parent (except the root). A node's in-memory identity is its
 object reference; its externalizable identity is its `id`.
-The Node object is read-only — all mutations go through the
-context API.
+The Node's data fields are read-only — all property mutations
+go through the context API. Each node maintains an eval loop
+that accepts operations via `node.eval()`, enabling scoped
+execution. `node.remove()` halts the node's scope and tears
+down all descendants.
 
 **Component.** A generator function of type
 `() => Operation<void>` that runs within a node's Effection
@@ -216,12 +223,16 @@ interface Node {
   readonly props: Record<string, JsonValue>;
   readonly children: Iterable<Node>;
   readonly parent: Node | undefined;
+  eval<T>(op: () => Operation<T>): Operation<Result<T>>;
+  remove(): Operation<void>;
 }
 ```
 
-The Node interface is entirely read-only. All mutations —
-property changes, structural changes, and sort installation —
-go through the `freedom:node` context API (§6).
+The Node's data fields are read-only. All property and
+structural mutations go through the `freedom:node` context
+API (§6). `eval` and `remove` are methods on Node because
+they require a specific node reference rather than operating
+on the ambient "current node."
 
 ### 5.2 Identity
 
@@ -252,16 +263,45 @@ N5. Nodes are long-lived Effection resources. A node is
 N6. The `name` field is informational. It does NOT participate
     in identity, uniqueness, or reconciliation.
 
-### 5.3 Lifecycle
+### 5.3 Scoped Evaluation
+
+Each node maintains an **eval loop** — a spawned child task
+within the node's scope that accepts and executes operations
+submitted via `node.eval()`. The eval loop uses a channel-
+based "fire and await" pattern: the caller submits an
+operation and waits for its result; the eval loop executes
+the operation in the node's scope and resolves the result.
+
+N-eval1. `node.eval(op)` runs `op` within the node's
+    Effection scope and returns `Result<T>`. If `op`
+    completes successfully, the result is
+    `{ ok: true, value: T }`. If `op` throws, the result
+    is `{ ok: false, error }`.
+
+N-eval2. Operations yielded inside `op` see the node's
+    scope context — including all middleware installed in
+    the node's scope and its ancestors.
+
+N-eval3. The eval loop executes operations sequentially.
+    If multiple callers submit operations concurrently,
+    they are processed in order.
+
+N-eval4. The eval loop is spawned as a child of the node's
+    scope. It runs alongside the component and shares the
+    same parent scope, so middleware installed by the
+    component is visible to operations executed via `eval`.
+
+### 5.4 Lifecycle
 
 N7. A node is created by `append()`, which spawns a new
     Effection child scope within the parent node's scope and
     runs the component within it.
 
-N8. A node is destroyed by `remove()`, which destroys the
-    node's Effection scope. This tears down the component,
-    all middleware installed in the scope, and all descendant
-    nodes (structured concurrency).
+N8. A node is destroyed by `node.remove()`, which halts the
+    node's spawned task. This triggers structured teardown
+    of the component, the eval loop, all middleware installed
+    in the scope, and all descendant nodes. `remove()` does
+    not return until teardown is complete.
 
 N9. When a node is destroyed, its middleware disappears
     automatically because the Effection scope is destroyed.
@@ -270,47 +310,55 @@ N10. When a parent node is destroyed, all child nodes are
      destroyed in reverse creation order (LIFO), per
      Effection's structured concurrency guarantees.
 
-### 5.4 Property Bag
+N11. `remove()` is a method on `Node`, not a context API
+     operation. A parent can remove a child directly:
+     `yield* child.remove()`. A node can remove itself:
+     for self-removal, the operation is cancelled as part
+     of the teardown — `remove()` never returns.
 
-N11. Properties are accessed via `node.props`, which returns
+N12. Calling `remove()` on the root node is an error.
+
+### 5.5 Property Bag
+
+N13. Properties are accessed via `node.props`, which returns
      a read-only `Record<string, JsonValue>`. Implementations
      SHOULD return a frozen or proxied object to enforce
      read-only access at runtime.
 
-N12. Properties MUST NOT be mutated by direct assignment to
+N14. Properties MUST NOT be mutated by direct assignment to
      the `props` object. The ONLY way to modify properties is
      through the `freedom:node` context API operations (`set`,
      `update`, `unset`). See §6.
 
-N13. The `props` object MUST reflect the latest state at all
+N15. The `props` object MUST reflect the latest state at all
      times. There is no staleness window.
 
-N14. Properties are namespaced by convention. Top-level keys
+N16. Properties are namespaced by convention. Top-level keys
      (e.g., `"clay"`, `"aria"`, `"app"`) serve as namespaces.
      Freedom does not enforce or validate namespaces.
 
-### 5.5 Children and Ordering
+### 5.6 Children and Ordering
 
-N15. Children are ordered. The default ordering is
+N17. Children are ordered. The default ordering is
      **insertion order** — children appear in the order they
      were appended.
 
-N16. A parent MAY install a **sort function** via the
+N18. A parent MAY install a **sort function** via the
      `sort` context API operation. When a sort function is
      active, iterating `node.children` applies the sort
      function to produce the ordering. Insertion order serves
      as tiebreaker for children that compare equal.
 
-N17. A parent MAY clear the sort function via
+N19. A parent MAY clear the sort function via
      `sort(undefined)`, which reverts to insertion order.
 
-N18. The sort function is applied at **read time** — when
+N20. The sort function is applied at **read time** — when
      `node.children` is iterated. There is no eager
      re-sorting on property changes. The sort is always
      fresh because it runs against current property values
      at iteration time.
 
-N19. Installing or clearing a sort function via `sort()`
+N21. Installing or clearing a sort function via `sort()`
      MUST emit a notification (§8), because the iteration
      order of children may have changed.
 
@@ -329,10 +377,13 @@ createApi("freedom:node", {
   *update(key: string, fn: (prev: JsonValue | undefined) => JsonValue): Operation<void>,
   *unset(key: string): Operation<void>,
   *append(name: string, component: Component): Operation<Node>,
-  *remove(): Operation<void>,
   *sort(fn: ((a: Node, b: Node) => number) | undefined): Operation<void>,
 })
 ```
+
+Note: `remove()` is a method on `Node` (§5.4), not a context
+API operation, because it requires a specific node reference
+and must be callable by parents on their children.
 
 ### 6.2 Operations
 
@@ -385,19 +436,6 @@ C14. The child node's scope is a child of the current node's
      from the parent's scope per Effection's context
      prototype chain.
 
-**remove**
-
-C15. `remove()` destroys the current node. This destroys
-     the node's Effection scope, which tears down the
-     component, all middleware, and all descendants.
-
-C16. `remove()` removes the node from its parent's children
-     list.
-
-C17. `remove` triggers a tree notification (§8).
-
-C18. Calling `remove()` on the root node is an error.
-
 **sort**
 
 C19. `sort(fn)` installs a sort function on the current
@@ -410,9 +448,9 @@ C20. `sort` triggers a tree notification (§8) (N19).
 
 ### 6.3 Middleware Interception
 
-C21. Because `set`, `update`, `unset`, `append`, `remove`,
-     and `sort` are `createApi` operations, they can be
-     intercepted by middleware installed in ancestor scopes.
+C21. Because `set`, `update`, `unset`, `append`, and `sort`
+     are `createApi` operations, they can be intercepted by
+     middleware installed in ancestor scopes.
 
 C22. A parent component MAY install middleware on
      `freedom:node` to validate, transform, log, or reject
@@ -429,13 +467,15 @@ C23. Middleware on `set` receives the `[key, value]` tuple
 
 ### 7.1 The Dispatch API
 
-Freedom provides exactly one event API:
+Freedom provides a dispatch API with event dispatch and
+node lookup:
 
 ```
 createApi("freedom:dispatch", {
   *dispatch(event: unknown): Operation<Result<true>> {
     return { ok: false };
   },
+  *getNodeById(id: string): Operation<Node | undefined>,
 })
 ```
 
@@ -454,14 +494,23 @@ E4. If middleware throws an exception, the result MUST
     capture it as `{ ok: false, error }`. The dispatch loop
     MUST NOT crash. The tree MUST remain alive.
 
+E4a. `getNodeById(id)` returns the node with the given `id`,
+     or `undefined` if no such node exists. This allows
+     dispatch middleware to resolve event targets by id and
+     use `node.eval()` to dispatch application-level APIs
+     in the target node's scope.
+
 ### 7.2 The Synchronous Bridge
 
 E5. `tree.dispatch(event)` is synchronous. It pushes the
     event into an Effection `Signal`.
 
 E6. Internally, an event loop reads from the Signal and
-    invokes `yield* dispatch.operations.dispatch(event)` for
-    each event.
+    dispatches each event through the root node's scope:
+    `yield* root.eval(() => dispatch.operations.dispatch(event))`.
+    The event loop itself MAY run anywhere — it enters the
+    root node's scope via `eval`, so dispatch middleware
+    installed by the root component is always in the chain.
 
 E7. Events are processed sequentially — one at a time, in
     the order they were dispatched. A new event is not
@@ -480,6 +529,30 @@ E9. Demuxing is the root component's responsibility. The
 E10. The root component is the first component to run, so
      its middleware is the outermost layer — it sees every
      event before any child middleware.
+
+E10a. Dispatch middleware uses `getNodeById()` and
+     `node.eval()` to route events to specific nodes.
+     When an event targets a particular node, the middleware
+     resolves the node by id, then uses `eval` to invoke
+     an application-level API in that node's scope. The
+     target node's middleware on that application API
+     participates because `eval` runs in the node's scope.
+
+     ```ts
+     // Example demux middleware (application-level, NOT Freedom)
+     yield* DispatchApi.around({
+       *dispatch([event], next) {
+         if (isKeydown(event)) {
+           let node = yield* DispatchApi.operations.getNodeById(event.targetId);
+           if (node) {
+             yield* node.eval(() => KeyboardApi.operations.keydown(event));
+           }
+           return { ok: true, value: true };
+         }
+         return yield* next(event);
+       },
+     });
+     ```
 
 E11. Applications define their own event APIs using
      `createApi`. These are NOT part of Freedom.
@@ -569,14 +642,15 @@ T5. `createTree(root: Component): Operation<Tree>` creates
     2. Creates the event Signal.
     3. Creates the root node.
     4. Runs the root component within the root node's scope.
-    5. Spawns the event loop.
+    5. Spawns the event loop, which dispatches events through
+       the root node via `root.eval()`.
     6. Returns the Tree.
 
-T6. The root component runs to completion (or its first
-    yield point in an infinite loop) before `createTree`
-    returns. This allows the root component to install
-    middleware and append children before any events are
-    processed.
+T6. `createTree` returns once the root node's eval loop is
+    ready to accept operations. The root component runs
+    concurrently within the root node's scope — it MAY
+    still be executing when `createTree` returns. The tree
+    is usable as soon as `eval` is operational.
 
 ### 8.3 Notification
 
@@ -613,7 +687,10 @@ T13. Destroying the tree (exiting its Effection scope)
      the output stream.
 
 T14. Events dispatched after the tree is destroyed are
-     silently dropped.
+     silently dropped. This is a natural consequence of
+     structured concurrency — the event Signal is inert
+     once the tree's scope exits. Implementations do NOT
+     need an explicit alive check.
 
 ---
 
@@ -639,16 +716,15 @@ P3. A component's lifetime is the node's lifetime. When the
 ### 9.2 Execution Model
 
 P4. The node's scope outlives the component generator. When
-    the generator returns, the node remains alive — its
-    scope persists, its properties persist, and its
-    middleware remains active. There is no need to call
-    `suspend()` to keep a node alive.
+    the generator returns, the node remains alive — the
+    eval loop (§5.3) keeps the scope active, properties
+    persist, and middleware remains active.
 
 P5. A component takes one of two forms:
 
     **Initialization-only:** The component sets properties,
     installs middleware, appends children, and returns. The
-    node lives on.
+    node lives on via its eval loop.
 
     ```ts
     function* header(): Operation<void> {
@@ -658,18 +734,25 @@ P5. A component takes one of two forms:
     }
     ```
 
-    **Reactive loop:** The component enters an infinite loop
-    that reacts to changes over time.
+    **Reactive:** The component spawns a long-lived task
+    that reacts to changes over time, then returns.
 
     ```ts
     function* clock(): Operation<void> {
-      let i = 0;
-      while (true) {
-        yield* set("tick", i++);
-        yield* sleep(1000);
-      }
+      yield* spawn(function* () {
+        let i = 0;
+        while (true) {
+          yield* set("tick", i++);
+          yield* sleep(1000);
+        }
+      });
     }
     ```
+
+    A component MAY also run an infinite loop inline,
+    but this blocks the component body from returning.
+    The eval loop and the component run concurrently
+    regardless.
 
 P6. Steps within a component (setting properties, installing
     middleware, appending children) complete in order. This
@@ -709,9 +792,13 @@ I7. **Ordering consistency.** `node.children` always reflects
     sort function applied at read time against current
     property values.
 
-I8. **Node read-only.** The Node object's fields (`id`,
-    `name`, `props`, `children`, `parent`) are read-only.
-    All mutations go through the `freedom:node` context API.
+I8. **Node read-only plus methods.** The Node object's data
+    fields (`id`, `name`, `props`, `children`, `parent`) are
+    read-only. All property and structural mutations go
+    through the `freedom:node` context API. `eval()` provides
+    scoped operation execution and `remove()` provides
+    lifecycle management — neither mutates the node's data
+    fields.
 
 ---
 
@@ -753,8 +840,10 @@ on `set`.
 ### 11.5 Node Queries
 
 Querying the tree by property values, name patterns, or
-other criteria is not provided. Consumers walk the tree
-via `root` and `children`.
+other criteria is not provided. `getNodeById()` is provided
+as part of the dispatch API (§7.1) for event targeting.
+For other queries, consumers walk the tree via `root` and
+`children`.
 
 ### 11.6 Event Bubbling / Capturing
 
@@ -786,7 +875,8 @@ coalescing.
 children list with read-time sort.
 
 **`lib/dispatch.ts`** — `createApi("freedom:dispatch", ...)`.
-Single `dispatch(event: unknown) → Result<true>`.
+`dispatch(event: unknown) → Result<true>` and
+`getNodeById(id: string) → Node | undefined`.
 Sync→operational bridge via Signal.
 
 **`lib/context.ts`** — `createApi("freedom:node", ...)`.
