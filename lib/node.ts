@@ -92,6 +92,10 @@ export class NodeImpl implements Node {
   }
 
   *eval<T>(op: () => Operation<T>): Operation<Result<T>> {
+    let node = yield* NodeContext.expect();
+    if (node === this) {
+      return yield* box(op);
+    }
     let resolver = withResolvers<Result<T>>();
     yield* this._channel.send({
       resolve: resolver.resolve as (result: Result<unknown>) => void,
@@ -121,7 +125,6 @@ export function* spawnEvalLoop(
       }
       let call = next.value;
       let result = yield* box(call.operation);
-      console.log("resolve? maybe");
       call.resolve(result);
     }
   });

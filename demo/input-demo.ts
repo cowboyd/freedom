@@ -38,11 +38,11 @@ import { createApi } from "effection/experimental";
 const InputApi = createApi("herpderp", {
   *keydown(event: KeyDown): Operation<void> {
     if (event.code == "Tab") {
-      if (event.shift) {
-        yield* retreat();
-      } else {
-        yield* advance();
-      }
+      console.log("FOCUS advance");
+      yield* advance();
+    } else if (event.code === "Backtab") {
+      console.log("FOCUS retreat");
+      yield* retreat();
     }
   },
   *keyup(event: KeyUp): Operation<void> {
@@ -50,11 +50,11 @@ const InputApi = createApi("herpderp", {
   },
   *keyrepeat(event: KeyRepeat): Operation<void> {
     if (event.code == "Tab") {
-      if (event.shift) {
-        yield* retreat();
-      } else {
-        yield* advance();
-      }
+      console.log("FOCUS advance");
+      yield* advance();
+    } else if (event.code === "Backtab") {
+      console.log("FOCUS retreat");
+      yield* retreat();
     }
   },
 });
@@ -65,11 +65,8 @@ await main(function* () {
     yield* DispatchApi.around({
       *dispatch([event], next) {
         if (isKeyboardEvent(event)) {
-          console.log({ event });
           let focus = yield* current();
-          yield* sleep(0);
           let result = yield* focus.eval(function* () {
-            console.log("focus eval", { event });
             let handler = InputApi.operations[event.type];
             yield* handler(event as any);
           });
