@@ -10,8 +10,30 @@ import {
   spawn,
   withResolvers,
 } from "effection";
-import type { JsonValue, Node } from "./types.ts";
+import type { JsonValue, Node, NodeData, NodeDataKey } from "./types.ts";
 
+class NodeDataImpl implements NodeData {
+  _map: Map<symbol, unknown> = new Map();
+
+  get<T>(key: NodeDataKey<T>): T | undefined {
+    return this._map.get(key.symbol) as T | undefined;
+  }
+
+  set<T>(key: NodeDataKey<T>, value: T): void {
+    this._map.set(key.symbol, value);
+  }
+
+  expect<T>(key: NodeDataKey<T>): T {
+    let val = this._map.get(key.symbol);
+    if (val !== undefined) {
+      return val as T;
+    } else if (key.defaultValue !== undefined) {
+      return key.defaultValue;
+    } else {
+      throw new Error(`NodeData '${key.symbol.description}' not found`);
+    }
+  }
+}
 
 interface CallEval {
   operation: () => Operation<unknown>;
@@ -35,6 +57,7 @@ export class NodeImpl implements Node {
   _children: Set<NodeImpl> = new Set();
   _sortFn: ((a: Node, b: Node) => number) | undefined = undefined;
   _channel: Channel<CallEval, never> = createChannel<CallEval, never>();
+  data: NodeData = new NodeDataImpl();
 
   constructor(
     readonly id: string,

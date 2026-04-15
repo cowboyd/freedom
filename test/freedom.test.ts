@@ -2,11 +2,13 @@ import { describe, it, expect } from "../test/suite.ts";
 import { run, sleep } from "effection";
 import {
   useTree,
+  get,
   set,
   update,
   unset,
   append,
   sort,
+  FreedomApi,
   DispatchApi,
 } from "../mod.ts";
 
@@ -472,6 +474,116 @@ describe("Notification coalescing", () => {
       tree.dispatch("no-op");
       yield* sleep(0);
       // No notification emitted — dirty was false
+    });
+  });
+});
+
+describe("get operation", () => {
+  it("GA1: get returns stored value", async () => {
+    await run(function* () {
+      let tree = yield* useTree(function* () {});
+      yield* tree.root.eval(function* () {
+        yield* set("k", 42);
+        let val = yield* get("k");
+        expect(val).toEqual(42);
+      });
+    });
+  });
+
+  it("GA2: get returns undefined for missing key", async () => {
+    await run(function* () {
+      let tree = yield* useTree(function* () {});
+      yield* tree.root.eval(function* () {
+        let val = yield* get("missing");
+        expect(val).toBeUndefined();
+      });
+    });
+  });
+
+  it("GA3: get middleware can intercept reads", async () => {
+    await run(function* () {
+      let tree = yield* useTree(function* () {
+        yield* set("k", 1);
+        yield* FreedomApi.around({
+          *get([key], next) {
+            let val = yield* next(key);
+            if (key === "k") {
+              return (val as number) * 10;
+            }
+            return val;
+          },
+        });
+      });
+      let result = yield* tree.root.eval(function* () {
+        return yield* get("k");
+      });
+      expect(result).toEqual({ ok: true, value: 10 });
+    });
+  });
+});
+
+describe("remove operation", () => {
+  it("RA1: remove destroys child node", async () => {
+    await run(function* () {
+      let tree = yield* useTree(function* () {});
+      let result = yield* tree.root.eval(function* () {
+        let child = yield* append("child", function* () {});
+        yield* child.remove();
+      });
+      expect(result.ok).toBe(true);
+      expect([...tree.root.children].length).toEqual(0);
+    });
+  });
+
+  it("RA2: remove on root raises error", async () => {
+    await run(function* () {
+      let tree = yield* useTree(function* () {});
+      let result = yield* tree.root.eval(function* () {
+        yield* tree.root.remove();
+      });
+      expect(result.ok).toBe(false);
+    });
+  });
+
+  it("RA3: remove middleware can intercept removal", async () => {
+    await run(function* () {
+      let intercepted = false;
+      let tree = yield* useTree(function* () {
+        yield* FreedomApi.around({
+          *remove([node], next) {
+            intercepted = true;
+            yield* next(node);
+          },
+        });
+      });
+      yield* tree.root.eval(function* () {
+        let child = yield* append("child", function* () {});
+        yield* child.remove();
+      });
+      expect(intercepted).toBe(true);
+    });
+  });
+
+  it("RA4: remove middleware runs before teardown", async () => {
+    await run(function* () {
+      let nameBeforeTeardown = "";
+      let tree = yield* useTree(function* () {
+        yield* FreedomApi.around({
+          *remove([node], next) {
+            nameBeforeTeardown = node.name;
+            let found = [...tree.root.children].find(
+              (c) => c.name === node.name,
+            );
+            expect(found).toBeTruthy();
+            yield* next(node);
+          },
+        });
+      });
+      yield* tree.root.eval(function* () {
+        let child = yield* append("target", function* () {});
+        yield* child.remove();
+      });
+      expect(nameBeforeTeardown).toEqual("target");
     });
   });
 });

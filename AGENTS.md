@@ -1,5 +1,20 @@
 # AGENTS.md
 
+## Spec-driven development
+
+- Specs in `specs/` are the source of truth. Code conforms to specs,
+  not the other way around.
+
+- Never add, remove, or change a public API (interfaces, operations,
+  context APIs) in code without first updating the relevant spec and
+  getting explicit approval from the user. This includes changes to
+  `Node`, `Tree`, `FreedomApi`, `DispatchApi`, `FocusApi`, and any
+  future spec'd interfaces.
+
+- The workflow is: propose the spec change, wait for approval,
+  then implement. Do not combine spec changes with implementation
+  in a single step.
+
 ## Effection patterns
 
 - Never use `sleep(0)` for synchronization. If you need to coordinate
@@ -42,3 +57,6 @@
 - Use `node.eval()` to run operations in a node's scope from tests.
   Do not rely on component bodies having run by the time `createTree`
   returns.
+- Each test file tests exactly one spec. `freedom.test.ts` tests
+  `freedom-spec.md`. `focus.test.ts` tests `freedom-focus-spec.md`.
+  Do not put tests for one spec into another spec's test file.

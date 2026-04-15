@@ -34,6 +34,7 @@ export function useTree(root: Component): Operation<Tree> {
     yield* TreeContext.set(state);
 
     let rootNode = new NodeImpl(state.nextId(), "", undefined);
+    rootNode.remove = () => FreedomApi.operations.remove(rootNode);
     state.nodes.set(rootNode.id, rootNode);
 
     let ready = withResolvers<void>();
@@ -60,6 +61,10 @@ export function useTree(root: Component): Operation<Tree> {
           let node = yield* next(...args);
           state.markDirty();
           return node;
+        },
+        *remove(args, next) {
+          yield* next(...args);
+          state.markDirty();
         },
         *sort(args, next) {
           yield* next(...args);

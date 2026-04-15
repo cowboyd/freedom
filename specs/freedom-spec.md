@@ -226,6 +226,7 @@ interface Node {
   readonly props: Record<string, JsonValue>;
   readonly children: Iterable<Node>;
   readonly parent: Node | undefined;
+  readonly data: NodeData;
   eval<T>(op: () => Operation<T>): Operation<Result<T>>;
   remove(): Operation<void>;
 }
@@ -237,7 +238,8 @@ API (§6). `eval` is a method on Node because it requires a
 specific node reference. `remove` is both a method and a
 context API operation — the method delegates to the
 operation (§6.2), ensuring middleware participates in
-teardown.
+teardown. `data` provides typed, symbol-keyed storage for
+private, non-serializable per-node state (§5.7).
 
 ### 5.2 Identity
 
@@ -371,6 +373,74 @@ N20. The sort function is applied at **read time** — when
 N21. Installing or clearing a sort function via `sort()`
      MUST emit a notification (§8), because the iteration
      order of children may have changed.
+
+### 5.7 Node Data
+
+Node data is typed, symbol-keyed storage for non-serializable,
+private values associated with a node. It exists to give
+extensions and middleware a place to store per-node state that
+is invisible to other extensions, renderers, and application
+code.
+
+The property bag (§5.5) is the node's public, renderable
+state — constrained to JsonValue, frozen, and observable via
+notifications. Node data is the complement: private state
+owned by a specific extension, unconstrained in type, and
+invisible to the rest of the system. Only code holding the
+key can read or write the data. All NodeData operations are
+synchronous — no scope resolution is needed because the node
+reference provides direct access to its data.
+
+```ts
+interface NodeDataKey<T> {
+  readonly symbol: symbol;
+  readonly defaultValue?: T;
+}
+
+interface NodeData {
+  get<T>(key: NodeDataKey<T>): T | undefined;
+  set<T>(key: NodeDataKey<T>, value: T): void;
+  expect<T>(key: NodeDataKey<T>): T;
+}
+
+function createNodeData<T>(
+  name: string,
+  defaultValue?: T,
+): NodeDataKey<T>;
+```
+
+D1. `createNodeData(name, defaultValue?)` creates a typed
+    data key backed by a `Symbol(name)`. The symbol ensures
+    true privacy — only code holding the key can access the
+    data.
+
+D2. `node.data.get(key)` returns the stored value, or
+    `undefined` if no value was set.
+
+D3. `node.data.set(key, value)` stores a value on the node
+    under the given key.
+
+D4. `node.data.expect(key)` returns the stored value, or
+    `defaultValue` if no value was set. If neither exists,
+    it throws an error.
+
+D5. Node data does NOT trigger tree notifications. It is
+    invisible to renderers.
+
+The Node interface is extended:
+
+```ts
+interface Node {
+  readonly id: string;
+  readonly name: string;
+  readonly props: Record<string, JsonValue>;
+  readonly children: Iterable<Node>;
+  readonly parent: Node | undefined;
+  readonly data: NodeData;
+  eval<T>(op: () => Operation<T>): Operation<Result<T>>;
+  remove(): Operation<void>;
+}
+```
 
 ---
 

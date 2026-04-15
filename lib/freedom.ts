@@ -1,11 +1,16 @@
 import { spawn, suspend, withResolvers, type Api, type Operation } from "effection";
 import { createApi } from "effection/experimental";
-import type { Component, JsonValue, Node } from "./types.ts";
+import { createNodeData, type Component, type JsonValue, type Node } from "./types.ts";
 import { NodeContext, NodeImpl, spawnEvalLoop } from "./node.ts";
 import { TreeContext } from "./state.ts";
 import { validateJsonValue } from "./validate.ts";
 
+const Halt = createNodeData<() => Operation<void>>("freedom:halt", function* () {
+  throw new Error("Cannot remove root node");
+});
+
 export interface Freedom {
+  get(key: string): Operation<JsonValue | undefined>;
   set(key: string, value: JsonValue): Operation<void>;
   update(
     key: string,
@@ -13,10 +18,16 @@ export interface Freedom {
   ): Operation<void>;
   unset(key: string): Operation<void>;
   append(name: string, component: Component): Operation<Node>;
+  remove(node: Node): Operation<void>;
   sort(fn: ((a: Node, b: Node) => number) | undefined): Operation<void>;
 }
 
 export const FreedomApi: Api<Freedom> = createApi<Freedom>("freedom:node", {
+  *get(key: string): Operation<JsonValue | undefined> {
+    let node = yield* NodeContext.expect();
+    return node._props[key];
+  },
+
   *set(key: string, value: JsonValue) {
     validateJsonValue(value);
     let node = yield* NodeContext.expect();
@@ -59,10 +70,16 @@ export const FreedomApi: Api<Freedom> = createApi<Freedom>("freedom:node", {
         tree.markDirty();
       }
     });
-    child.remove = task.halt;
+    child.data.set(Halt, task.halt);
+    child.remove = () => FreedomApi.operations.remove(child);
 
     yield* ready.operation;
     return child;
+  },
+
+  *remove(node: Node) {
+    let halt = node.data.expect(Halt);
+    yield* halt();
   },
 
   *sort(fn: ((a: Node, b: Node) => number) | undefined) {
@@ -71,8 +88,10 @@ export const FreedomApi: Api<Freedom> = createApi<Freedom>("freedom:node", {
   },
 });
 
+export const get: typeof FreedomApi.operations.get = FreedomApi.operations.get;
 export const set: typeof FreedomApi.operations.set = FreedomApi.operations.set;
 export const update: typeof FreedomApi.operations.update = FreedomApi.operations.update;
 export const unset: typeof FreedomApi.operations.unset = FreedomApi.operations.unset;
 export const append: typeof FreedomApi.operations.append = FreedomApi.operations.append;
+export const remove: typeof FreedomApi.operations.remove = FreedomApi.operations.remove;
 export const sort: typeof FreedomApi.operations.sort = FreedomApi.operations.sort;
