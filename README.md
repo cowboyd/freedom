@@ -6,3 +6,20 @@ A general-purpose abstract component tree built on [Effection](https://frontside
 
 - [Freedom Specification](specs/freedom-spec.md)
 - [Freedom Conformance Test Plan](specs/freedom-test-plan.md)
+
+## Extension Modules
+
+Freedom is extensible through extension modules — operations installed by the root component that add capabilities to the tree using Freedom's context APIs. Extensions use middleware interception, scoped evaluation, and the property bag to layer behavior without modifying the core.
+
+### Focus
+
+The [Focus extension](specs/freedom-focus-spec.md) tracks which node in the tree is currently receiving input. Focus state is observable as a regular node property (`node.props.focused`), and the focus chain is derived from the tree by depth-first traversal. See the [research summary](research/focus.md) for background on focus management across UI paradigms.
+
+Install focus in the root component:
+
+```ts
+function* app(): Operation<void> {
+  yield* useFocus();
+  // ... rest of app
+}
+```

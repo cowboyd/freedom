@@ -88,9 +88,10 @@ The `Node` object's data fields — `id`, `name`, `props`,
 and structural mutations go through the `freedom:node`
 context API, which makes every mutation interceptable by
 middleware. `Node` also exposes `eval()` for scoped operation
-execution and `remove()` for lifecycle management — these
-are methods, not context API operations, because they
-require a specific node reference.
+execution and `remove()` for lifecycle management. `remove()`
+is both a convenience method on `Node` and a context API
+operation — the method delegates to the operation, ensuring
+middleware always participates in teardown.
 
 ---
 
@@ -110,8 +111,10 @@ object reference; its externalizable identity is its `id`.
 The Node's data fields are read-only — all property mutations
 go through the context API. Each node maintains an eval loop
 that accepts operations via `node.eval()`, enabling scoped
-execution. `node.remove()` halts the node's scope and tears
-down all descendants.
+execution. `node.remove()` delegates to the `remove` context
+API operation, which halts the node's scope and tears down
+all descendants. Middleware on `remove` participates in
+teardown.
 
 **Component.** A generator function of type
 `() => Operation<void>` that runs within a node's Effection
@@ -230,9 +233,11 @@ interface Node {
 
 The Node's data fields are read-only. All property and
 structural mutations go through the `freedom:node` context
-API (§6). `eval` and `remove` are methods on Node because
-they require a specific node reference rather than operating
-on the ambient "current node."
+API (§6). `eval` is a method on Node because it requires a
+specific node reference. `remove` is both a method and a
+context API operation — the method delegates to the
+operation (§6.2), ensuring middleware participates in
+teardown.
 
 ### 5.2 Identity
 
@@ -310,13 +315,18 @@ N10. When a parent node is destroyed, all child nodes are
      destroyed in reverse creation order (LIFO), per
      Effection's structured concurrency guarantees.
 
-N11. `remove()` is a method on `Node`, not a context API
-     operation. A parent can remove a child directly:
-     `yield* child.remove()`. A node can remove itself:
-     for self-removal, the operation is cancelled as part
-     of the teardown — `remove()` never returns.
+N11. `node.remove()` delegates to the `remove` context API
+     operation (§6.2) via
+     `yield* node.eval(() => remove(node))`. The `remove`
+     operation runs inside the node's scope, and all
+     middleware on `remove` participates in the teardown
+     (outer to inner). The innermost implementation halts
+     the scope from within. The method remains on `Node`
+     for ergonomic use by parents:
+     `yield* child.remove()`.
 
-N12. Calling `remove()` on the root node is an error.
+N12. Calling `remove()` on the root node is an error
+     (C-rm3).
 
 ### 5.5 Property Bag
 
@@ -373,19 +383,32 @@ The node context API is an Effection API created with
 
 ```
 createApi("freedom:node", {
+  *get(key: string): Operation<JsonValue | undefined>,
   *set(key: string, value: JsonValue): Operation<void>,
   *update(key: string, fn: (prev: JsonValue | undefined) => JsonValue): Operation<void>,
   *unset(key: string): Operation<void>,
   *append(name: string, component: Component): Operation<Node>,
+  *remove(node: Node): Operation<void>,
   *sort(fn: ((a: Node, b: Node) => number) | undefined): Operation<void>,
 })
 ```
 
-Note: `remove()` is a method on `Node` (§5.4), not a context
-API operation, because it requires a specific node reference
-and must be callable by parents on their children.
+Note: `node.remove()` is a convenience method that delegates
+to the `remove` context API operation via
+`yield* node.eval(() => remove(node))`. This ensures all
+middleware on `remove` participates in teardown.
 
 ### 6.2 Operations
+
+**get**
+
+C-get1. `get(key)` returns the value of `key` in the current
+    node's property bag, or `undefined` if the key does not
+    exist.
+
+C-get2. `get` is a `createApi` operation and can be
+    intercepted by middleware. A parent MAY install middleware
+    on `get` to transform, log, or virtualize property reads.
 
 **set**
 
@@ -446,11 +469,30 @@ C19. `sort(fn)` installs a sort function on the current
 
 C20. `sort` triggers a tree notification (§8) (N19).
 
+**remove**
+
+C-rm1. `remove(node)` removes the given node. The innermost
+     (default) implementation halts the node's scope from
+     within, triggering structured teardown of the component,
+     the eval loop, all middleware installed in the scope, and
+     all descendant nodes. The halt mechanism lives inside the
+     scope (e.g., a resolver the suspended task awaits) — the
+     node does not hold a reference to its task.
+
+C-rm2. `remove(node)` is a `createApi` operation and can be
+     intercepted by middleware. Extensions (e.g., focus) MAY
+     install middleware on `remove` to perform cleanup before
+     the node is destroyed.
+
+C-rm3. `remove(node)` on the root node is an error.
+
+C-rm4. `remove` triggers a tree notification (§8).
+
 ### 6.3 Middleware Interception
 
-C21. Because `set`, `update`, `unset`, `append`, and `sort`
-     are `createApi` operations, they can be intercepted by
-     middleware installed in ancestor scopes.
+C21. Because `get`, `set`, `update`, `unset`, `append`,
+     `remove`, and `sort` are `createApi` operations, they can
+     be intercepted by middleware installed in ancestor scopes.
 
 C22. A parent component MAY install middleware on
      `freedom:node` to validate, transform, log, or reject
@@ -794,11 +836,12 @@ I7. **Ordering consistency.** `node.children` always reflects
 
 I8. **Node read-only plus methods.** The Node object's data
     fields (`id`, `name`, `props`, `children`, `parent`) are
-    read-only. All property and structural mutations go
-    through the `freedom:node` context API. `eval()` provides
-    scoped operation execution and `remove()` provides
-    lifecycle management — neither mutates the node's data
-    fields.
+    read-only. All property reads and mutations go through the
+    `freedom:node` context API (`get`, `set`, `update`,
+    `unset`, `append`, `remove`, `sort`). `eval()` provides
+    scoped operation execution. `remove()` is both a
+    convenience method and a context API operation — the
+    method delegates to the operation.
 
 ---
 
@@ -879,8 +922,8 @@ children list with read-time sort.
 `getNodeById(id: string) → Node | undefined`.
 Sync→operational bridge via Signal.
 
-**`lib/context.ts`** — `createApi("freedom:node", ...)`.
-`set`, `update`, `unset`, `append`, `remove`, `sort`
+**`lib/freedom.ts`** — `createApi("freedom:node", ...)`.
+`get`, `set`, `update`, `unset`, `append`, `remove`, `sort`
 operations.
 
 **`lib/mod.ts`** — Re-exports.
