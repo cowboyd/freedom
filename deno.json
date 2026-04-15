@@ -17,6 +17,7 @@
     "lib": ["deno.ns", "esnext", "dom", "dom.iterable", "deno.unstable"]
   },
   "imports": {
+    "@clayterm/clayterm": "jsr:@clayterm/clayterm@^0.6.0",
     "effection": "jsr:@effection/effection@4.1.0-alpha.7",
     "effection/experimental": "jsr:@effection/effection@4.1.0-alpha.7/experimental",
     "@std/testing": "jsr:@std/testing@1",

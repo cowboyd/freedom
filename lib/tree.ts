@@ -1,10 +1,10 @@
 import {
   createSignal,
+  type Operation,
   resource,
   spawn,
   suspend,
   withResolvers,
-  type Operation,
 } from "effection";
 import type { Component, Tree } from "./types.ts";
 import { NodeContext, NodeImpl, spawnEvalLoop } from "./node.ts";
@@ -84,7 +84,9 @@ export function useTree(root: Component): Operation<Tree> {
           }
           let event = next.value;
           state.dirty = false;
+          console.log("before dispatch");
           yield* rootNode.eval(() => DispatchApi.operations.dispatch(event));
+          console.log("after dispatch");
           if (state.dirty) {
             output.send();
           }
