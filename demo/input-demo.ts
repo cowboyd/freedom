@@ -8,6 +8,7 @@ import {
   sleep,
   spawn,
   type Stream,
+  suspend,
   until,
 } from "effection";
 
@@ -20,19 +21,24 @@ import {
   useFocus,
   useTree,
 } from "../lib/mod.ts";
+
+import { NodeContext } from "../lib/node.ts";
 import {
+  close,
   createInput,
   createTerm,
   KeyDown,
   KeyEvent,
   KeyRepeat,
   KeyUp,
+  Op,
+  open,
+  text,
 } from "@clayterm/clayterm";
 
 import { useInput } from "./use-input.ts";
 import { useStdin } from "./use-stdin.ts";
-import { append } from "@frontside/freedom";
-import { FreedomApi } from "../lib/freedom.ts";
+import { append, createNodeData, type Node } from "@frontside/freedom";
 import { createApi } from "effection/experimental";
 
 const InputApi = createApi("clayterm:input", {
@@ -70,6 +76,23 @@ function onkeydown(
   });
 }
 
+function* useNode() {
+  let node = yield* NodeContext.expect();
+  return node;
+}
+
+const layoutKey = createNodeData("herpderp", () => []);
+
+interface LayoutOptions {
+  node: Node;
+  children: Iterable<Op>;
+}
+
+function* layout(body: (props: LayoutOptions) => Op[]): Operation<void> {
+  let node = yield* useNode();
+  node.data.set(layoutKey, body);
+}
+
 await main(function* () {
   let tree = yield* useTree(function* () {
     yield* useFocus();
@@ -89,13 +112,31 @@ await main(function* () {
     });
 
     yield* append("input-1", function* () {
+      yield* layout(({ node, children }) => {
+        return [
+          open(node.id, {
+            border: { color: 0xFFF, top: 1, right: 1, bottom: 1, left: 1 },
+          }),
+          ...children,
+          close(),
+        ];
+      });
+
       yield* onkeydown(function* (event, next) {
-        yield* focusable();
         console.log("component 1:capture", { event });
         yield* next(event);
       });
 
       yield* append("input-1-1", function* () {
+        yield* layout(({ node, children }) => {
+          let cn = { color: 0x0FF, top: 1, right: 1, bottom: 1, left: 1 };
+          let border = node.props.focused ? cn : ({});
+          return [
+            open(node.id, { border }),
+            text("asdfas"),
+            close(),
+          ];
+        });
         yield* focusable();
         yield* onkeydown(function* (event, next) {
           console.log("component 1-1:capture", { event });
@@ -125,28 +166,44 @@ await main(function* () {
     ? Deno.consoleSize()
     : { columns: 80, rows: 24 };
 
-  // render loop
-  yield* spawn(function* () {
-    for (let _ of yield* each(tree)) {
-      // need something to render too?
-      yield* each.next();
-    }
-  });
-
   Deno.stdin.setRaw(true);
   let stdin = yield* useStdin();
   let input = useInput(stdin);
 
-  for (let event of yield* each(input)) {
-    if (event.type == "keydown") {
-      if (event.ctrl && event.code == "c") {
-        break;
+  let term = yield* until(createTerm({ height: rows, width: columns }));
+
+  let events = yield* spawn(function* () {
+    for (let event of yield* each(input)) {
+      if (event.type == "keydown") {
+        if (event.ctrl && event.code == "c") {
+          break;
+        }
       }
+      if (event.type == "resize") {
+        term = yield* until(createTerm({
+          height: event.height,
+          width: event.width,
+        }));
+      }
+      let _ = tree.dispatch(event);
+      yield* each.next();
     }
-    tree.dispatch(event);
-    yield* each.next();
-  }
+  });
+
+  // render
+  yield* spawn(function* () {
+    let ops = [];
+    for (let _ of yield* each(tree)) {
+    }
+  });
+
+  yield* events;
 });
+
+function walk(node: Node, ops: Op[]) {
+  for (let child of node.children) {
+  }
+}
 
 function isKeyboardEvent(event: unknown): event is KeyEvent {
   let x = event as KeyEvent;

@@ -11,6 +11,8 @@ export { createNodeData } from "./types.ts";
 
 export { useTree } from "./tree.ts";
 
+export { NodeContext } from "./node.ts";
+
 export {
   append,
   type Freedom,
@@ -23,7 +25,7 @@ export {
   update,
 } from "./freedom.ts";
 
-export { DispatchApi, type Dispatch } from "./dispatch.ts";
+export { type Dispatch, DispatchApi } from "./dispatch.ts";
 
 export {
   advance,
