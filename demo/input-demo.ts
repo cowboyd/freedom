@@ -35,14 +35,14 @@ import { append } from "@frontside/freedom";
 import { FreedomApi } from "../lib/freedom.ts";
 import { createApi } from "effection/experimental";
 
-const InputApi = createApi("herpderp", {
+const InputApi = createApi("clayterm:input", {
   *keydown(event: KeyDown): Operation<void> {
     if (event.code == "Tab") {
-      console.log("FOCUS advance");
       yield* advance();
+      let focused = yield* current();
     } else if (event.code === "Backtab") {
-      console.log("FOCUS retreat");
       yield* retreat();
+      let focused = yield* current();
     }
   },
   *keyup(event: KeyUp): Operation<void> {
@@ -50,14 +50,26 @@ const InputApi = createApi("herpderp", {
   },
   *keyrepeat(event: KeyRepeat): Operation<void> {
     if (event.code == "Tab") {
-      console.log("FOCUS advance");
       yield* advance();
     } else if (event.code === "Backtab") {
-      console.log("FOCUS retreat");
       yield* retreat();
     }
   },
 });
+
+function onkeydown(
+  handler: (
+    event: KeyDown,
+    next: (event: KeyDown) => Operation<void>,
+  ) => Operation<void>,
+): Operation<void> {
+  return InputApi.around({
+    keydown([event], next) {
+      return handler(event, next);
+    },
+  });
+}
+
 await main(function* () {
   let tree = yield* useTree(function* () {
     yield* useFocus();
@@ -76,23 +88,34 @@ await main(function* () {
       },
     });
 
-    yield* append("input", function* () {
-      yield* InputApi.around({
-        *keydown([event], next) {
-          console.log("component 1", { event });
-          yield* next(event);
-        },
+    yield* append("input-1", function* () {
+      yield* onkeydown(function* (event, next) {
+        yield* focusable();
+        console.log("component 1:capture", { event });
+        yield* next(event);
       });
-      yield* focusable();
+
+      yield* append("input-1-1", function* () {
+        yield* focusable();
+        yield* onkeydown(function* (event, next) {
+          console.log("component 1-1:capture", { event });
+          yield* next(event);
+        });
+      });
+
+      yield* append("input-1-2", function* () {
+        yield* focusable();
+        yield* onkeydown(function* (event, next) {
+          console.log("component 1-2", { event });
+          yield* next(event);
+        });
+      });
     });
 
-    yield* append("input", function* () {
-      // what does happen?
-      yield* InputApi.around({
-        *keydown([event], next) {
-          console.log("component 2", { event });
-          yield* next(event);
-        },
+    yield* append("input-2", function* () {
+      yield* onkeydown(function* (event, next) {
+        console.log("component 2:capture", { event });
+        yield* next(event);
       });
       yield* focusable();
     });
