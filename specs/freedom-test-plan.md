@@ -208,6 +208,28 @@ CO10. Sort with equal comparisons — insertion order is
 
 ---
 
+## 5b. useNode Operation
+
+### 5b.1 Core: Node Resolution
+
+UN1. `useNode()` in the root component returns the root node.
+     `node === tree.root`.
+
+UN2. `useNode()` inside a child component returns the child
+     node. `node.name` matches the child's name and
+     `node !== tree.root`.
+
+UN3. `useNode()` via `node.eval()` returns the eval target
+     node.
+
+### 5b.2 Core: Middleware Interception
+
+UN4. Parent installs middleware on `useNode`. Child calls
+     `useNode()`. Parent middleware intercepts and may
+     substitute a different node reference.
+
+---
+
 ## 6. Node Context API Middleware
 
 ### 6.1 Core: Interception

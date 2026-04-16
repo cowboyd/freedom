@@ -10,6 +10,7 @@ const Halt = createNodeData<() => Operation<void>>("freedom:halt", function* () 
 });
 
 export interface Freedom {
+  useNode(): Operation<Node>;
   get(key: string): Operation<JsonValue | undefined>;
   set(key: string, value: JsonValue): Operation<void>;
   update(
@@ -23,6 +24,8 @@ export interface Freedom {
 }
 
 export const FreedomApi: Api<Freedom> = createApi<Freedom>("freedom:node", {
+  useNode: () => NodeContext.expect(),
+
   *get(key: string): Operation<JsonValue | undefined> {
     let node = yield* NodeContext.expect();
     return node._props[key];
@@ -88,6 +91,7 @@ export const FreedomApi: Api<Freedom> = createApi<Freedom>("freedom:node", {
   },
 });
 
+export const useNode: typeof FreedomApi.operations.useNode = FreedomApi.operations.useNode;
 export const get: typeof FreedomApi.operations.get = FreedomApi.operations.get;
 export const set: typeof FreedomApi.operations.set = FreedomApi.operations.set;
 export const update: typeof FreedomApi.operations.update = FreedomApi.operations.update;
