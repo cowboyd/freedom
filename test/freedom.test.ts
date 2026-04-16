@@ -8,6 +8,7 @@ import {
   unset,
   append,
   sort,
+  useNode,
   FreedomApi,
   DispatchApi,
 } from "../mod.ts";
@@ -584,6 +585,75 @@ describe("remove operation", () => {
         yield* child.remove();
       });
       expect(nameBeforeTeardown).toEqual("target");
+    });
+  });
+});
+
+describe("useNode operation", () => {
+  it("UN1: returns root node in root component", async () => {
+    await run(function* () {
+      let tree = yield* useTree(function* () {
+        let node = yield* useNode();
+        expect(node).toBe(tree.root);
+      });
+    });
+  });
+
+  it("UN2: returns child node in child component", async () => {
+    await run(function* () {
+      let tree = yield* useTree(function* () {
+        yield* append("child", function* () {
+          let node = yield* useNode();
+          expect(node).not.toBe(tree.root);
+          expect(node.name).toEqual("child");
+        });
+      });
+      yield* sleep(0);
+    });
+  });
+
+  it("UN3: returns eval target node via node.eval", async () => {
+    await run(function* () {
+      let tree = yield* useTree(function* () {});
+      let child = yield* tree.root.eval(function* () {
+        return yield* append("target", function* () {});
+      });
+      if (!child.ok) throw child.error;
+
+      let result = yield* child.value.eval(function* () {
+        return yield* useNode();
+      });
+      if (!result.ok) throw result.error;
+
+      expect(result.value).toBe(child.value);
+    });
+  });
+
+  it("UN4: middleware can intercept useNode", async () => {
+    await run(function* () {
+      let tree = yield* useTree(function* () {
+        yield* FreedomApi.around({
+          *useNode(_, next) {
+            let node = yield* next();
+            return node;
+          },
+        });
+      });
+
+      let intercepted = false;
+      yield* tree.root.eval(function* () {
+        let child = yield* append("child", function* () {});
+        yield* FreedomApi.around({
+          *useNode(_, next) {
+            intercepted = true;
+            return yield* next();
+          },
+        });
+        yield* child.eval(function* () {
+          yield* useNode();
+        });
+      });
+      expect(intercepted).toBe(true);
     });
   });
 });

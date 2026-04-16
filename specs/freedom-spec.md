@@ -453,6 +453,7 @@ The node context API is an Effection API created with
 
 ```
 createApi("freedom:node", {
+  *useNode(): Operation<Node>,
   *get(key: string): Operation<JsonValue | undefined>,
   *set(key: string, value: JsonValue): Operation<void>,
   *update(key: string, fn: (prev: JsonValue | undefined) => JsonValue): Operation<void>,
@@ -469,6 +470,20 @@ to the `remove` context API operation via
 middleware on `remove` participates in teardown.
 
 ### 6.2 Operations
+
+**useNode**
+
+C-node1. `useNode()` returns the current node from the ambient
+    scope as a `Node`.
+
+C-node2. `useNode()` MUST be called within a node's scope
+    (inside a component body, middleware, or an `eval` call).
+    If called outside a node scope, it MUST raise an error.
+
+C-node3. `useNode` is a `createApi` operation and can be
+    intercepted by middleware. A parent MAY install middleware
+    on `useNode` to substitute a different node reference
+    (e.g., for virtualization or proxying).
 
 **get**
 
@@ -993,8 +1008,8 @@ children list with read-time sort.
 Sync→operational bridge via Signal.
 
 **`lib/freedom.ts`** — `createApi("freedom:node", ...)`.
-`get`, `set`, `update`, `unset`, `append`, `remove`, `sort`
-operations.
+`useNode`, `get`, `set`, `update`, `unset`, `append`, `remove`,
+`sort` operations.
 
 **`lib/mod.ts`** — Re-exports.
 

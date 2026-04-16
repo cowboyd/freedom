@@ -21,6 +21,7 @@ export {
   sort,
   unset,
   update,
+  useNode,
 } from "./freedom.ts";
 
 export { DispatchApi, type Dispatch } from "./dispatch.ts";
