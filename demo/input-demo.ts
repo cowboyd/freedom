@@ -6,7 +6,9 @@ import {
   DispatchApi,
   focusable,
   retreat,
+  set,
   type Tree,
+  update,
   useFocus,
   useTree,
 } from "../lib/mod.ts";
@@ -91,6 +93,23 @@ function* layout(body: (props: LayoutOptions) => Op[]): Operation<void> {
   node.data.set(layoutKey, body);
 }
 
+function* useTextInput(): Operation<void> {
+  yield* focusable();
+  yield* set("value", "");
+  yield* onkeydown(function* (event, next) {
+    if (event.key.length === 1) {
+      yield* update("value", (v) => `${v ?? ""}${event.key}`);
+    } else if (event.code === "Backspace") {
+      yield* update("value", (v) => {
+        let str = String(v ?? "");
+        return str.slice(0, -1);
+      });
+    } else {
+      yield* next(event);
+    }
+  });
+}
+
 await main(function* () {
   let tree = yield* useTree(function* () {
     yield* useFocus();
@@ -148,7 +167,7 @@ await main(function* () {
       });
 
       yield* append("input-1-1", function* () {
-        yield* focusable();
+        yield* useTextInput();
         yield* layout(({ node }) => {
           let color = node.props.focused ? rgba(255, 255, 255) : GRAY;
           let border = { color, top: 1, right: 1, bottom: 1, left: 1 };
@@ -156,19 +175,19 @@ await main(function* () {
             open(node.id, {
               border,
               layout: {
-                height: fit(),
+                height: fit(3),
                 width: percent(0.3),
                 padding: { top: 1, right: 1, bottom: 1, left: 1 },
               },
             }),
-            text("asdfas", { color: rgba(255, 255, 255, .5) }),
+            text(String(node.props.value ?? "")),
             close(),
           ];
         });
       });
 
       yield* append("input-1-2", function* () {
-        yield* focusable();
+        yield* useTextInput();
         yield* layout(({ node }) => {
           let color = node.props.focused ? rgba(255, 255, 255) : GRAY;
           let border = { color, top: 1, right: 1, bottom: 1, left: 1 };
@@ -176,12 +195,12 @@ await main(function* () {
             open(node.id, {
               border,
               layout: {
-                height: fit(),
+                height: fit(3),
                 width: percent(0.3),
                 padding: { top: 1, right: 1, bottom: 1, left: 1 },
               },
             }),
-            text("asdfas"),
+            text(String(node.props.value ?? "")),
             close(),
           ];
         });
@@ -189,6 +208,7 @@ await main(function* () {
     });
 
     yield* append("input-2", function* () {
+      yield* useTextInput();
       yield* layout(({ node }) => {
         let color = node.props.focused ? rgba(255, 255, 255) : GRAY;
         let border = { color, top: 1, right: 1, bottom: 1, left: 1 };
@@ -196,20 +216,15 @@ await main(function* () {
           open(node.id, {
             border,
             layout: {
-              height: fit(),
+              height: fit(3),
               width: percent(0.3),
               padding: { top: 1, right: 1, bottom: 1, left: 1 },
             },
           }),
-          text("asdfas"),
+          text(String(node.props.value ?? "")),
           close(),
         ];
       });
-
-      yield* onkeydown(function* (event, next) {
-        yield* next(event);
-      });
-      yield* focusable();
     });
   });
 
