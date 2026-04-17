@@ -1,16 +1,4 @@
-import {
-  createChannel,
-  each,
-  main,
-  type Operation,
-  race,
-  resource,
-  sleep,
-  spawn,
-  type Stream,
-  suspend,
-  until,
-} from "effection";
+import { each, main, type Operation, spawn, until } from "effection";
 
 import {
   advance,
@@ -18,21 +6,28 @@ import {
   DispatchApi,
   focusable,
   retreat,
+  type Tree,
   useFocus,
   useTree,
 } from "../lib/mod.ts";
 
 import { NodeContext } from "../lib/node.ts";
 import {
+  alternateBuffer,
   close,
-  createInput,
   createTerm,
-  KeyDown,
-  KeyEvent,
-  KeyRepeat,
-  KeyUp,
-  Op,
+  cursor,
+  fit,
+  grow,
+  type KeyDown,
+  type KeyEvent,
+  type KeyRepeat,
+  type KeyUp,
+  type Op,
   open,
+  percent,
+  rgba,
+  settings,
   text,
 } from "@clayterm/clayterm";
 
@@ -41,17 +36,17 @@ import { useStdin } from "./use-stdin.ts";
 import { append, createNodeData, type Node } from "@frontside/freedom";
 import { createApi } from "effection/experimental";
 
+const GRAY = rgba(100, 100, 100);
+
 const InputApi = createApi("clayterm:input", {
   *keydown(event: KeyDown): Operation<void> {
     if (event.code == "Tab") {
       yield* advance();
-      let focused = yield* current();
     } else if (event.code === "Backtab") {
       yield* retreat();
-      let focused = yield* current();
     }
   },
-  *keyup(event: KeyUp): Operation<void> {
+  *keyup(_event: KeyUp): Operation<void> {
     // no-op
   },
   *keyrepeat(event: KeyRepeat): Operation<void> {
@@ -81,7 +76,10 @@ function* useNode() {
   return node;
 }
 
-const layoutKey = createNodeData("herpderp", () => []);
+const layoutKey = createNodeData<(options: LayoutOptions) => Op[]>(
+  "herpderp",
+  () => [],
+);
 
 interface LayoutOptions {
   node: Node;
@@ -96,6 +94,27 @@ function* layout(body: (props: LayoutOptions) => Op[]): Operation<void> {
 await main(function* () {
   let tree = yield* useTree(function* () {
     yield* useFocus();
+    yield* layout(({ node, children }) => {
+      return [
+        open(node.id, {
+          layout: {
+            height: grow(),
+            width: grow(),
+            direction: "ttb",
+            padding: { top: 1, right: 1, bottom: 1, left: 1 },
+          },
+          border: {
+            color: rgba(255, 255, 255),
+            top: 1,
+            right: 1,
+            bottom: 1,
+            left: 1,
+          },
+        }),
+        ...children,
+        close(),
+      ];
+    });
 
     yield* DispatchApi.around({
       *dispatch([event], next) {
@@ -103,7 +122,7 @@ await main(function* () {
           let focus = yield* current();
           let result = yield* focus.eval(function* () {
             let handler = InputApi.operations[event.type];
-            yield* handler(event as any);
+            yield* handler(event as KeyDown & KeyUp & KeyRepeat);
           });
           return result.ok ? { ok: true, value: true } : result;
         }
@@ -116,46 +135,78 @@ await main(function* () {
         return [
           open(node.id, {
             border: { color: 0xFFF, top: 1, right: 1, bottom: 1, left: 1 },
+            layout: {
+              height: fit(),
+              width: grow(),
+              direction: "ttb",
+              padding: { top: 1, right: 1, bottom: 1, left: 1 },
+            },
           }),
           ...children,
           close(),
         ];
       });
 
-      yield* onkeydown(function* (event, next) {
-        console.log("component 1:capture", { event });
-        yield* next(event);
-      });
-
       yield* append("input-1-1", function* () {
-        yield* layout(({ node, children }) => {
-          let cn = { color: 0x0FF, top: 1, right: 1, bottom: 1, left: 1 };
-          let border = node.props.focused ? cn : ({});
+        yield* focusable();
+        yield* layout(({ node }) => {
+          let color = node.props.focused ? rgba(255, 255, 255) : GRAY;
+          let border = { color, top: 1, right: 1, bottom: 1, left: 1 };
           return [
-            open(node.id, { border }),
-            text("asdfas"),
+            open(node.id, {
+              border,
+              layout: {
+                height: fit(),
+                width: percent(0.3),
+                padding: { top: 1, right: 1, bottom: 1, left: 1 },
+              },
+            }),
+            text("asdfas", { color: rgba(255, 255, 255, .5) }),
             close(),
           ];
-        });
-        yield* focusable();
-        yield* onkeydown(function* (event, next) {
-          console.log("component 1-1:capture", { event });
-          yield* next(event);
         });
       });
 
       yield* append("input-1-2", function* () {
         yield* focusable();
-        yield* onkeydown(function* (event, next) {
-          console.log("component 1-2", { event });
-          yield* next(event);
+        yield* layout(({ node }) => {
+          let color = node.props.focused ? rgba(255, 255, 255) : GRAY;
+          let border = { color, top: 1, right: 1, bottom: 1, left: 1 };
+          return [
+            open(node.id, {
+              border,
+              layout: {
+                height: fit(),
+                width: percent(0.3),
+                padding: { top: 1, right: 1, bottom: 1, left: 1 },
+              },
+            }),
+            text("asdfas"),
+            close(),
+          ];
         });
       });
     });
 
     yield* append("input-2", function* () {
+      yield* layout(({ node }) => {
+        let color = node.props.focused ? rgba(255, 255, 255) : GRAY;
+        let border = { color, top: 1, right: 1, bottom: 1, left: 1 };
+        return [
+          open(node.id, {
+            border,
+            layout: {
+              height: fit(),
+              width: percent(0.3),
+              padding: { top: 1, right: 1, bottom: 1, left: 1 },
+            },
+          }),
+          text("asdfas"),
+          close(),
+        ];
+      });
+
       yield* onkeydown(function* (event, next) {
-        console.log("component 2:capture", { event });
         yield* next(event);
       });
       yield* focusable();
@@ -185,24 +236,45 @@ await main(function* () {
           width: event.width,
         }));
       }
-      let _ = tree.dispatch(event);
+
+      tree.dispatch(event);
+
       yield* each.next();
     }
   });
 
-  // render
-  yield* spawn(function* () {
-    let ops = [];
-    for (let _ of yield* each(tree)) {
-    }
-  });
+  function render(tree: Tree) {
+    let ops = walk(tree.root);
+    let { output } = term.render(ops);
+    Deno.stdout.writeSync(output);
+  }
 
-  yield* events;
+  let tty = settings(cursor(false), alternateBuffer());
+
+  try {
+    Deno.stdout.writeSync(tty.apply);
+
+    render(tree);
+    yield* spawn(function* () {
+      for (let _ of yield* each(tree)) {
+        render(tree);
+        yield* each.next();
+      }
+    });
+
+    yield* events;
+  } finally {
+    Deno.stdout.writeSync(tty.revert);
+  }
 });
 
-function walk(node: Node, ops: Op[]) {
+function walk(node: Node): Op[] {
+  let children: Op[] = [];
   for (let child of node.children) {
+    children.push(...walk(child));
   }
+  let layout = node.data.get(layoutKey);
+  return layout ? layout({ node, children }) : children;
 }
 
 function isKeyboardEvent(event: unknown): event is KeyEvent {
