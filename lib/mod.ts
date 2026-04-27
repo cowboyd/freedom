@@ -24,7 +24,7 @@ export {
   useNode,
 } from "./freedom.ts";
 
-export { DispatchApi, type Dispatch } from "./dispatch.ts";
+export { type Dispatch, DispatchApi } from "./dispatch.ts";
 
 export {
   advance,

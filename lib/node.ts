@@ -1,13 +1,14 @@
 import {
   type Channel,
-  type Operation,
-  type Result,
-  type Stream,
-  Err,
-  Ok,
+  type Context,
   createChannel,
   createContext,
+  Err,
+  Ok,
+  type Operation,
+  type Result,
   spawn,
+  type Stream,
   withResolvers,
 } from "effection";
 import type { JsonValue, Node, NodeData, NodeDataKey } from "./types.ts";
@@ -105,7 +106,9 @@ export class NodeImpl implements Node {
   }
 }
 
-export function* spawnEvalLoop(channel: Channel<CallEval, never>): Operation<void> {
+export function* spawnEvalLoop(
+  channel: Channel<CallEval, never>,
+): Operation<void> {
   let ready = withResolvers<void>();
 
   yield* spawn(function* () {
@@ -126,4 +129,6 @@ export function* spawnEvalLoop(channel: Channel<CallEval, never>): Operation<voi
   yield* ready.operation;
 }
 
-export const NodeContext = createContext<NodeImpl>("freedom:current-node");
+export const NodeContext: Context<NodeImpl> = createContext<NodeImpl>(
+  "freedom:current-node",
+);

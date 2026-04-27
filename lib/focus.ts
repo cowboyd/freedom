@@ -31,7 +31,11 @@ function focusChain(node: Node): Node[] {
   return result;
 }
 
-function* setFocused(target: Node, value: boolean, self: NodeImpl): Operation<void> {
+function* setFocused(
+  target: Node,
+  value: boolean,
+  self: NodeImpl,
+): Operation<void> {
   if (target === self) {
     yield* set("focused", value);
   } else {

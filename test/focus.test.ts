@@ -2,15 +2,15 @@ import { describe, it } from "../test/suite.ts";
 import { expect } from "../test/helpers.ts";
 import { run } from "effection";
 import {
-  useTree,
-  set,
-  append,
-  useFocus,
-  focusable,
   advance,
-  retreat,
-  focus,
+  append,
   current,
+  focus,
+  focusable,
+  retreat,
+  set,
+  useFocus,
+  useTree,
 } from "../mod.ts";
 
 describe("Focus installation", () => {
