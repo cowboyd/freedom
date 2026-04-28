@@ -1,6 +1,6 @@
 import { expect as stdExpect } from "@std/expect";
 import type { Expected } from "@std/expect";
-import { sleep, type Operation } from "effection";
+import { type Operation, sleep } from "effection";
 import type { Node } from "../mod.ts";
 
 interface NodeExpected extends Expected {

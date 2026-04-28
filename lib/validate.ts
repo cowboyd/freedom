@@ -13,7 +13,9 @@ export function validateJsonValue(value: unknown): asserts value is JsonValue {
     }
     return;
   }
-  if (typeof value === "string" || typeof value === "boolean" || value === null) {
+  if (
+    typeof value === "string" || typeof value === "boolean" || value === null
+  ) {
     return;
   }
   if (typeof value === "function") {

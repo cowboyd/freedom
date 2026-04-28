@@ -1,4 +1,4 @@
-import { type Signal, createContext } from "effection";
+import { createContext, type Signal } from "effection";
 import type { NodeImpl } from "./node.ts";
 
 export interface TreeState {

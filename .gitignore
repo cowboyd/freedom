@@ -1,2 +1,4 @@
 /.agent-shell/
+/build/
+/**/node_modules/
 hack.ts

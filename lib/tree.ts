@@ -1,10 +1,10 @@
 import {
   createSignal,
+  type Operation,
   resource,
   spawn,
   suspend,
   withResolvers,
-  type Operation,
 } from "effection";
 import type { Component, Tree } from "./types.ts";
 import { NodeContext, NodeImpl, spawnEvalLoop } from "./node.ts";

@@ -15,7 +15,10 @@ export interface NodeDataKey<T> {
   readonly defaultValue?: T;
 }
 
-export function createNodeData<T>(name: string, defaultValue?: T): NodeDataKey<T> {
+export function createNodeData<T>(
+  name: string,
+  defaultValue?: T,
+): NodeDataKey<T> {
   return { symbol: Symbol(name), defaultValue };
 }
 

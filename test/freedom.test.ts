@@ -1,16 +1,16 @@
-import { describe, it, expect } from "../test/suite.ts";
+import { describe, expect, it } from "../test/suite.ts";
 import { run, sleep } from "effection";
 import {
-  useTree,
+  append,
+  DispatchApi,
+  FreedomApi,
   get,
   set,
-  update,
-  unset,
-  append,
   sort,
+  unset,
+  update,
   useNode,
-  FreedomApi,
-  DispatchApi,
+  useTree,
 } from "../mod.ts";
 
 describe("JsonValue validation", () => {
