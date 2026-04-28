@@ -106,4 +106,4 @@ jobs:
         run: deno task build:jsr ${{steps.vars.outputs.version}}
 
       - name: Publish JSR
-        run: deno publish --allow-dirty --token=${{ secrets.JSR_TOKEN }}
+        run: deno publish --allow-dirty
