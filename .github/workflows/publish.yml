@@ -71,7 +71,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 24
           registry-url: https://registry.npmjs.com
 
       - name: download build
@@ -81,10 +81,8 @@ jobs:
           path: ./build/npm
 
       - name: Publish NPM
-        run: npm publish --access=public --tag=latest
+        run: npm publish --access=public --tag=latest --provenance
         working-directory: ./build/npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-jsr:
     needs: [verify-jsr, verify-npm]
