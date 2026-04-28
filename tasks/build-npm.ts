@@ -41,4 +41,7 @@ await build({
     },
     sideEffects: false,
   },
+  async postBuild() {
+    await Deno.copyFile("README.md", `${outDir}/README.md`);
+  },
 });
